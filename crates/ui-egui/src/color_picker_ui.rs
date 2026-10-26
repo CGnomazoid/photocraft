@@ -669,6 +669,9 @@ fn fields(ui: &mut egui::Ui, f: &mut Map<String, Value>, mode: &str, now: &Compo
                     },
                 };
                 let r = crate::widgets::text_field_ex(ui, id, &mut h, "", 64.0, true, Some(6)).accessible_name(tl!("Color"));
+                // This field takes every paste while focused (`take_hex_paste` above), the
+                // paste button's included.
+                hex_clipboard_buttons(ui, id, rgb);
                 if let Some(c) = pasted {
                     edit = Some((c, Keep::Nothing));
                 }
@@ -742,6 +745,24 @@ fn take_hex_paste(ui: &egui::Ui) -> Option<[f32; 3]> {
         });
         found
     })
+}
+
+/// Copy and paste buttons for the hex colour field `field`, which shows `rgb`. Copy puts its
+/// `rrggbb` on the clipboard, as the Color panel's Copy Color's Hex Code does. Paste gives the
+/// field its focus back and asks for the clipboard, as ⌘V in the field does: the text arrives as a
+/// Paste event next pass, which the field must take while focused. The focus matters: with no
+/// text field focused, the app pastes that event into the document instead.
+pub(crate) fn hex_clipboard_buttons(ui: &mut egui::Ui, field: egui::Id, rgb: [f32; 3]) {
+    ui.scope(|ui| {
+        ui.spacing_mut().item_spacing.x = 2.0;
+        if crate::icons::button_with_icon_size(ui, "copy", 20.0, 13.0, false, "Copy hex code").clicked() {
+            ui.ctx().copy_text(crate::color_panel_ui::hex_code(rgb));
+        }
+        if crate::icons::button_with_icon_size(ui, "clipboard-paste", 20.0, 13.0, false, "Paste hex code").clicked() {
+            ui.memory_mut(|m| m.request_focus(field));
+            ui.ctx().send_viewport_cmd(egui::ViewportCommand::RequestPaste);
+        }
+    });
 }
 
 /// Add to Swatches was clicked: add the picked colour to the Swatches panel.
@@ -1018,6 +1039,35 @@ mod tests {
         h.run_steps(2);
         assert_eq!(h.get_by_role(Role::TextInput).value().as_deref(), Some("ff"));
         assert_eq!(color(&h), "#1234ab");
+    }
+
+    /// The copy button beside the hex field puts the colour's hex code on the clipboard, as the
+    /// Color panel's Copy Color's Hex Code does.
+    #[test]
+    fn hex_copy_button_copies_the_hex_code() {
+        let mut h = picker("#12abef");
+        h.get_by_label("Copy hex code").click();
+        h.run_steps(1);
+        let copied = h.output().platform_output.commands.iter().any(|c| matches!(c, egui::OutputCommand::CopyText(s) if s == "12abef"));
+        assert!(copied, "{:?}", h.output().platform_output.commands);
+        assert_eq!(color(&h), "#12abef", "copying leaves the colour alone");
+    }
+
+    /// The paste button asks for the clipboard and gives the hex field its focus back, so the
+    /// clipboard text that arrives next pass sets the colour as ⌘V in the field does.
+    #[test]
+    fn hex_paste_button_pastes_into_the_hex_field() {
+        let mut h = picker("#336699");
+        h.get_by_label("Paste hex code").click();
+        h.step();
+        let asked = h.output().viewport_output.values().any(|v| v.commands.contains(&egui::ViewportCommand::RequestPaste));
+        assert!(asked, "the paste button asks the platform for the clipboard");
+        h.run_steps(1);
+        assert!(h.get_by_role(Role::TextInput).is_focused(), "the hex field has its focus back for the paste");
+        h.event(egui::Event::Paste("#ff8800".into()));
+        h.run_steps(2);
+        assert_eq!(color(&h), "#ff8800");
+        assert_eq!(h.get_by_role(Role::TextInput).value().as_deref(), Some("FF8800"));
     }
 
     #[test]
