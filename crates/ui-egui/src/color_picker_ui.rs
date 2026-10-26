@@ -750,8 +750,8 @@ fn take_hex_paste(ui: &egui::Ui) -> Option<[f32; 3]> {
 /// Copy and paste buttons for the hex colour field `field`, which shows `rgb`. Copy puts its
 /// `rrggbb` on the clipboard, as the Color panel's Copy Color's Hex Code does. Paste gives the
 /// field its focus back and asks for the clipboard, as ⌘V in the field does: the text arrives as a
-/// Paste event next pass, which the field must take while focused. The focus matters: with no
-/// text field focused, the app pastes that event into the document instead.
+/// Paste event next pass, which the field takes whole with [`take_requested_hex_paste`]. The focus
+/// matters: with no text field focused, the app pastes that event into the document instead.
 pub(crate) fn hex_clipboard_buttons(ui: &mut egui::Ui, field: egui::Id, rgb: [f32; 3]) {
     ui.scope(|ui| {
         ui.spacing_mut().item_spacing.x = 2.0;
@@ -760,9 +760,26 @@ pub(crate) fn hex_clipboard_buttons(ui: &mut egui::Ui, field: egui::Id, rgb: [f3
         }
         if crate::icons::button_with_icon_size(ui, "clipboard-paste", 20.0, 13.0, false, "Paste hex code").clicked() {
             ui.memory_mut(|m| m.request_focus(field));
+            ui.data_mut(|d| d.insert_temp(field.with("paste-wanted"), true));
             ui.ctx().send_viewport_cmd(egui::ViewportCommand::RequestPaste);
         }
     });
+}
+
+/// The colour [`hex_clipboard_buttons`]' paste button asked for, once the clipboard text has
+/// arrived and is one: it replaces the field's text whole rather than going in at the cursor.
+/// Call before drawing the field, so the field never sees the Paste event it takes.
+pub(crate) fn take_requested_hex_paste(ui: &egui::Ui, field: egui::Id) -> Option<[f32; 3]> {
+    let wanted = field.with("paste-wanted");
+    if ui.data(|d| d.get_temp::<bool>(wanted)) != Some(true) {
+        return None;
+    }
+    let focused = ui.memory(|m| m.has_focus(field));
+    let arrived = ui.input(|i| i.events.iter().any(|e| matches!(e, egui::Event::Paste(_))));
+    if !focused || arrived {
+        ui.data_mut(|d| d.remove::<bool>(wanted));
+    }
+    if focused && arrived { take_hex_paste(ui) } else { None }
 }
 
 /// Add to Swatches was clicked: add the picked colour to the Swatches panel.
