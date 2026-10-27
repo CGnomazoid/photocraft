@@ -273,6 +273,16 @@ fn shape_paint_hex_copy_and_paste_buttons() {
         assert_eq!(if label == "Fill color" { tools.foreground } else { tools.background }, want, "{label}");
         assert_eq!(if label == "Fill color" { tools.background } else { tools.foreground }, original, "{label}");
         assert_eq!(h.get_by_label("#").value().as_deref(), Some("12ABEF"), "{label}");
+        // Pasting the colour already set still replaces half-typed digits.
+        h.key_press_modifiers(Modifiers::COMMAND, Key::A);
+        h.run_steps(1);
+        h.event(Event::Text("9".into()));
+        h.run_steps(1);
+        h.get_by_label("Paste hex code").click();
+        h.run_steps(1);
+        h.event(Event::Paste("#12ABEF".into()));
+        h.run_steps(2);
+        assert_eq!(h.get_by_label("#").value().as_deref(), Some("12ABEF"), "{label}: same-colour paste");
         h.key_press(Key::Escape);
         h.run_steps(2);
     }

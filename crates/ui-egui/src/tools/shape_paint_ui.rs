@@ -158,9 +158,11 @@ pub(crate) fn swatch(
         ui.horizontal(|ui| {
             let label = ui.label(egui::RichText::new("#").color(t.text_dim));
             let id = resp.id.with("shape-paint-hex");
-            // The paste button's clipboard colour replaces whatever is being typed; it keeps the
-            // paint's alpha, as a typed colour does.
+            // The paste button's clipboard colour replaces whatever is being typed (even when it is
+            // the colour already set, which would otherwise keep the typing); it keeps the paint's
+            // alpha, as a typed colour does.
             if let Some(rgb) = crate::color_picker_ui::take_requested_hex_paste(ui, id) {
+                ui.data_mut(|d| d.remove::<([f32; 4], String)>(id));
                 let alpha = match out {
                     Some(PaintChange::Color(color)) => color[3],
                     _ => original[3],
