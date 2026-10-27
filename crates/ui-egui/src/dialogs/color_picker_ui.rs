@@ -657,7 +657,9 @@ fn fields(ui: &mut egui::Ui, f: &mut Map<String, Value>, mode: &str, now: &Compo
                     ui.memory_mut(|m| m.request_focus(id));
                 }
                 let focused = ui.memory(|m| m.has_focus(id));
-                let pasted = if focused { take_hex_paste(ui) } else { None };
+                // The paste button's request first: its non-colour text changes nothing, where
+                // ⌘V's goes into the field as typing.
+                let pasted = if focused { take_requested_hex_paste(ui, id).or_else(|| take_hex_paste(ui)) } else { None };
                 let typing = if focused { ui.data(|d| d.get_temp::<String>(id)) } else { None };
                 // Drop stale typing when another path (web snap, field drag, Current) changed `color`.
                 let shown = hex(rgb);
@@ -669,8 +671,6 @@ fn fields(ui: &mut egui::Ui, f: &mut Map<String, Value>, mode: &str, now: &Compo
                     },
                 };
                 let r = crate::widgets::text_field_ex(ui, id, &mut h, "", 64.0, true, Some(6)).accessible_name(tl!("Color"));
-                // This field takes every paste while focused (`take_hex_paste` above), the
-                // paste button's included.
                 hex_clipboard_buttons(ui, id, rgb);
                 if let Some(c) = pasted {
                     edit = Some((c, Keep::Nothing));
@@ -768,7 +768,8 @@ pub(crate) fn hex_clipboard_buttons(ui: &mut egui::Ui, field: egui::Id, rgb: [f3
 
 /// The colour [`hex_clipboard_buttons`]' paste button asked for, once the clipboard text has
 /// arrived and is one: it replaces the field's text whole rather than going in at the cursor.
-/// Call before drawing the field, so the field never sees the Paste event it takes.
+/// Clipboard text that isn't a colour is dropped, so the button changes nothing; ⌘V's paste is
+/// left to the field. Call before drawing the field, so the field never sees the Paste event.
 pub(crate) fn take_requested_hex_paste(ui: &egui::Ui, field: egui::Id) -> Option<[f32; 3]> {
     let wanted = field.with("paste-wanted");
     if ui.data(|d| d.get_temp::<bool>(wanted)) != Some(true) {
@@ -779,7 +780,20 @@ pub(crate) fn take_requested_hex_paste(ui: &egui::Ui, field: egui::Id) -> Option
     if !focused || arrived {
         ui.data_mut(|d| d.remove::<bool>(wanted));
     }
-    if focused && arrived { take_hex_paste(ui) } else { None }
+    if !(focused && arrived) {
+        return None;
+    }
+    ui.input_mut(|i| {
+        let mut found = None;
+        i.events.retain(|e| match e {
+            egui::Event::Paste(s) => {
+                found = found.or_else(|| parse_hex(s));
+                false
+            }
+            _ => true,
+        });
+        found
+    })
 }
 
 /// Add to Swatches was clicked: add the picked colour to the Swatches panel.

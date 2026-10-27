@@ -216,7 +216,8 @@ fn hex_copy_button_copies_the_hex_code() {
 }
 
 /// The paste button asks for the clipboard and gives the hex field its focus back, so the
-/// clipboard text that arrives next pass sets the colour as ⌘V in the field does.
+/// clipboard text that arrives next pass sets the colour as ⌘V in the field does. Text that
+/// isn't a colour changes nothing, the field included.
 #[test]
 fn hex_paste_button_pastes_into_the_hex_field() {
     let mut h = picker("#336699");
@@ -230,6 +231,12 @@ fn hex_paste_button_pastes_into_the_hex_field() {
     h.run_steps(2);
     assert_eq!(color(&h), "#ff8800");
     assert_eq!(h.get_by_role(Role::TextInput).value().as_deref(), Some("FF8800"));
+    h.get_by_label("Paste hex code").click();
+    h.run_steps(1);
+    h.event(egui::Event::Paste("hello".into()));
+    h.run_steps(2);
+    assert_eq!(color(&h), "#ff8800");
+    assert_eq!(h.get_by_role(Role::TextInput).value().as_deref(), Some("FF8800"), "non-colour text stays out of the field");
 }
 
 #[test]

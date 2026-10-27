@@ -283,6 +283,14 @@ fn shape_paint_hex_copy_and_paste_buttons() {
         h.event(Event::Paste("#12ABEF".into()));
         h.run_steps(2);
         assert_eq!(h.get_by_label("#").value().as_deref(), Some("12ABEF"), "{label}: same-colour paste");
+        // Clipboard text that isn't a colour changes nothing, the field included.
+        h.get_by_label("Paste hex code").click();
+        h.run_steps(1);
+        h.event(Event::Paste("hello".into()));
+        h.run_steps(2);
+        assert_eq!(h.get_by_label("#").value().as_deref(), Some("12ABEF"), "{label}: non-colour paste");
+        let tools = &h.state().session.tools;
+        assert_eq!(if label == "Fill color" { tools.foreground } else { tools.background }, want, "{label}");
         h.key_press(Key::Escape);
         h.run_steps(2);
     }
