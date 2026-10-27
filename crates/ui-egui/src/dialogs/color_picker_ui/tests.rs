@@ -239,6 +239,25 @@ fn hex_paste_button_pastes_into_the_hex_field() {
     assert_eq!(h.get_by_role(Role::TextInput).value().as_deref(), Some("FF8800"), "non-colour text stays out of the field");
 }
 
+/// An empty clipboard answers the paste button with no Paste event; once the request lapses, a
+/// later ⌘V is the field's own again rather than being taken as the button's answer.
+#[test]
+fn an_unanswered_paste_button_request_lapses() {
+    let mut h = picker("#336699");
+    h.get_by_label("Paste hex code").click();
+    h.run_steps(1);
+    let asked = h.ctx.input(|i| i.time);
+    while h.ctx.input(|i| i.time) - asked <= PASTE_ANSWER_SECS {
+        h.step();
+    }
+    h.key_press_modifiers(egui::Modifiers::COMMAND, egui::Key::A);
+    h.run_steps(1);
+    h.event(egui::Event::Paste("ff".into()));
+    h.run_steps(2);
+    assert_eq!(h.get_by_role(Role::TextInput).value().as_deref(), Some("ff"), "⌘V's text goes into the field");
+    assert_eq!(color(&h), "#336699");
+}
+
 #[test]
 fn color_picker_opens_with_hex_focused_and_selected() {
     let mut h = picker("#336699");
